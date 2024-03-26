@@ -1,6 +1,13 @@
-use std::fmt::Display;
+use std::fmt::{write, Display};
 
 use bitflags::bitflags;
+
+#[repr(u16)]
+#[derive(Debug, Clone, Copy)]
+pub enum PEType {
+    Pe32 = 0x10b,
+    Pe32Plus = 0x20b
+}
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +79,46 @@ impl Display for MachineType {
     }
 }
 
+#[repr(u16)]
+#[derive(Debug)]
+pub enum WindowsSubsystem {
+    Unknown = 0,
+    Native = 1,
+    WindowsGui = 2,
+    WindowsCui = 3,
+    Os2Cui = 5,
+    PosixCui = 7,
+    NativeWindows = 8,
+    WindowsCeGui = 9,
+    EfiApplication = 10,
+    EfiBootServiceDriver = 11,
+    EfiRuntimeDriver = 12,
+    EfiRom = 13,
+    Xbox = 14,
+    WindowsBootApplication = 16
+}
+
+impl Display for WindowsSubsystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::Unknown => write!(f, "Unknown"),
+            Self::Native => write!(f, "Device driver / native Windows process"),
+            Self::WindowsGui => write!(f, "Windows GUI"),
+            Self::WindowsCui => write!(f, "Windows CUI"),
+            Self::Os2Cui => write!(f, "OS/2 CUI"),
+            Self::PosixCui => write!(f, "POSIX CUI"),
+            Self::NativeWindows => write!(f, "Native Win9x driver"),
+            Self::WindowsCeGui => write!(f, "Windows CE"),
+            Self::EfiApplication => write!(f, "EFI application"),
+            Self::EfiBootServiceDriver => write!(f, "EFI driver with boot services"),
+            Self::EfiRuntimeDriver => write!(f, "EFI driver with runtime services"),
+            Self::EfiRom => write!(f, "EFI ROM"),
+            Self::Xbox => write!(f, "Xbox"),
+            Self::WindowsBootApplication => write!(f, "Windows boot application")
+        }
+    }
+}
+
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct Characteristics: u16 {
@@ -93,9 +140,26 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Debug, Clone, Copy)]
+    pub struct DllCharacteristics: u16 {
+        const HighEntropyVa = 0x0020;
+        const DynamicBase = 0x0040;
+        const ForceIntegrity = 0x0080;
+        const NxCompat = 0x0100;
+        const NoIsolation = 0x0200;
+        const NoSeh = 0x0400;
+        const NoBind = 0x0800;
+        const AppContainer = 0x1000;
+        const WdmDriver = 0x2000;
+        const GuardCf = 0x4000;
+        const TerminalServerAware = 0x8000;
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct PEHeader {
+pub struct CoffHeader {
     pub target_machine: MachineType,
     pub number_of_sections: u16,
     pub time_date_stamp: u32,
@@ -103,4 +167,55 @@ pub struct PEHeader {
     pub number_of_symbols: u32,
     pub size_of_optional_header: u16,
     pub characteristics: Characteristics,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderStandardFields {
+    pub magic: u16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: u32,
+    pub size_of_initialised_data: u32,
+    pub size_of_uninitialised_data: u32,
+    pub address_of_entry_point: u32,
+    pub base_of_code: u32,
+    pub base_of_data: u32
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderWindowsFields {
+    pub image_base: u32,
+    pub section_alignment: u32,
+    pub file_alignment: u32,
+    pub major_operating_system_version: u16,
+    pub minor_operating_system_version: u16,
+    pub major_image_version: u16,
+    pub minor_image_version: u16,
+    pub major_subsystem_version: u16,
+    pub minor_subsystem_version: u16,
+    pub win32_version_value: u32,
+    pub size_of_image: u32,
+    pub size_of_headers: u32,
+    pub checksum: u32,
+    pub subsystem: u16,
+    pub dll_characteristics: u16,
+    pub size_of_stack_reserve: u32,
+    pub size_of_stack_commit: u32,
+    pub size_of_heap_reserve: u32,
+    pub size_of_heap_commit: u32,
+    pub loader_flags: u32,
+    pub number_of_rva_and_sizes: u32
+}
+
+pub struct OptionalHeader {
+    pub standard_fields: OptionalHeaderStandardFields,
+    pub windows_fields: OptionalHeaderWindowsFields
+}
+
+#[repr(C)]
+pub struct PEHeader {
+    pub coff_header: CoffHeader,
+    pub optional_header: OptionalHeader
 }

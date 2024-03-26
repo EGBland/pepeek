@@ -6,7 +6,7 @@ use std::os::windows::fs::FileExt;
 use std::process;
 
 pub mod pe;
-use crate::pe::PEHeader;
+use crate::pe::CoffHeader;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -24,13 +24,13 @@ fn main() {
         header.target_machine as u16, header.target_machine
     );
     println!(
-        "Characteristics: 0x{:04x}\n{:?}",
+        "Characteristics: 0x{:04x} ({:?})",
         header.characteristics.bits(),
         header.characteristics
     );
 }
 
-fn get_header(fh: &File) -> io::Result<PEHeader> {
+fn get_header(fh: &File) -> io::Result<CoffHeader> {
     let metadata = fh.metadata()?;
     let len = metadata.len();
 
@@ -44,7 +44,7 @@ fn get_header(fh: &File) -> io::Result<PEHeader> {
 
     let header_addr = get_header_address(fh)?;
     let bytes = get_header_bytes(fh, header_addr)?;
-    let header: PEHeader = unsafe { transmute(bytes) }; // TODO this is amusing but extremely bad :-)
+    let header: CoffHeader = unsafe { transmute(bytes) }; // TODO this is amusing but extremely bad :-)
     Ok(header)
 }
 
