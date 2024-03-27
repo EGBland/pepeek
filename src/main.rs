@@ -16,7 +16,6 @@ fn main() {
     let handle = File::open(path).expect("could not open file!!");
 
     let from_file = crate::pe::win::get_headers_from_file(&handle).unwrap();
-    let coff = from_file.coff_header();
     let optional_pe32 = from_file.optional_header_pe32();
     let optional_pe32plus = from_file.optional_header_pe32plus();
 
@@ -35,6 +34,7 @@ fn main() {
     }
 }
 
+#[allow(dead_code)]
 fn print_info(header: &CoffHeader) {
     println!(
         "Machine type: {:?} ({}) (0x{:04x})",

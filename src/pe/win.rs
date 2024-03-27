@@ -1,9 +1,7 @@
-use core::num;
-use std::error::Error;
 use std::fs::File;
+use std::io;
 use std::mem::{size_of, transmute};
 use std::os::windows::fs::FileExt;
-use std::{io, option};
 
 use crate::pe::err::PEError;
 use crate::pe::{CoffHeader, PEType};
@@ -87,7 +85,7 @@ fn get_data_directories(fh: &File, base_addr: u32, num_directories: u32) -> io::
 
 fn get_optional_headers_pe32(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32> {
     let mut headers_bytes: [u8; 96] = [0_u8; 96];
-    let optional_addr = get_optional_headers_addr(&fh, coff_addr, &coff_header).unwrap();
+    let optional_addr = get_optional_headers_addr(coff_addr, &coff_header).unwrap();
     let bytes_read = fh.seek_read(&mut headers_bytes, optional_addr as u64)?;
     if bytes_read != 96 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading optional headers"));
@@ -98,7 +96,7 @@ fn get_optional_headers_pe32(fh: &File, coff_addr: u32, coff_header: &CoffHeader
 
 fn get_optional_headers_pe32plus(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32Plus> {
     let mut headers_bytes: [u8; 112] = [0_u8; 112];
-    let optional_addr = get_optional_headers_addr(&fh, coff_addr, &coff_header).unwrap();
+    let optional_addr = get_optional_headers_addr(coff_addr, &coff_header).unwrap();
     let bytes_read = fh.seek_read(&mut headers_bytes, optional_addr as u64)?;
     if bytes_read != 112 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading optional headers"));
@@ -122,7 +120,7 @@ fn get_coff_header(fh: &File) -> io::Result<CoffHeader> {
     Ok(header)
 }
 
-fn get_optional_headers_addr(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> Option<u32> {
+fn get_optional_headers_addr(coff_addr: u32, coff_header: &CoffHeader) -> Option<u32> {
     if coff_header.size_of_optional_header == 0 {
         return None;
     } else {
@@ -131,7 +129,7 @@ fn get_optional_headers_addr(fh: &File, coff_addr: u32, coff_header: &CoffHeader
 }
 
 fn get_optional_headers_magic(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<Option<PEType>> {
-    let addr_option = get_optional_headers_addr(fh, coff_addr, coff_header);
+    let addr_option = get_optional_headers_addr(coff_addr, coff_header);
     if let Some(addr) = addr_option {
         let mut magic_bytes: [u8; 2] = [0_u8; 2];
         let bytes_read = fh.seek_read(&mut magic_bytes, addr as u64)?;
