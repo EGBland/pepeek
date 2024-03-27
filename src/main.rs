@@ -32,6 +32,12 @@ fn main() {
             println!("{:?}", dir);
         }
     }
+
+    for header in from_file.section_headers() {
+        let name = String::from_utf8_lossy(&header.name);
+        println!("{}", name);
+        println!("{:?}", header);
+    }
 }
 
 #[allow(dead_code)]
