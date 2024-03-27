@@ -1,21 +1,28 @@
-use std::fmt::Display;
 use bitflags::bitflags;
+use std::fmt::Display;
+
+use self::traits::PEHeader;
 
 pub mod err;
+pub mod traits;
 
+/// Windows-specific implementation for deserialisation.
 #[cfg(windows)]
 pub mod win;
 
+/// UNIX-specific implementation for deserialisation.
 #[cfg(unix)]
 pub mod unix;
 
+/// The two possible flavours of PE optional header.
 #[repr(u16)]
 #[derive(Debug, Clone, Copy)]
 pub enum PEType {
     Pe32 = 0x10b,
-    Pe32Plus = 0x20b
+    Pe32Plus = 0x20b,
 }
 
+/// Machine types that a PE can target.
 #[repr(u16)]
 #[derive(Debug, Clone, Copy)]
 pub enum MachineType {
@@ -48,6 +55,281 @@ pub enum MachineType {
     Sh5 = 0x1a8,
     Thumb = 0x1c2,
     WceMipsV2 = 0x169,
+}
+
+/// Possible Windows subsystems that a PE can require.
+#[repr(u16)]
+#[derive(Debug)]
+pub enum WindowsSubsystem {
+    Unknown = 0,
+    Native = 1,
+    WindowsGui = 2,
+    WindowsCui = 3,
+    Os2Cui = 5,
+    PosixCui = 7,
+    NativeWindows = 8,
+    WindowsCeGui = 9,
+    EfiApplication = 10,
+    EfiBootServiceDriver = 11,
+    EfiRuntimeDriver = 12,
+    EfiRom = 13,
+    Xbox = 14,
+    WindowsBootApplication = 16,
+}
+
+bitflags! {
+    /// PE characteristic flags given in the COFF header.
+    #[derive(Debug, Clone, Copy)]
+    pub struct CoffCharacteristics: u16 {
+        const RelocsStripped = 0x0001;
+        const ExecutableImage = 0x0002;
+        const LineNumsStripped = 0x0004;
+        const LocalSymsStripped = 0x0008;
+        const AggressiveWsTrim = 0x0010;
+        const LargeAddressAware = 0x0020;
+        const BytesReservedLo = 0x0080;
+        const Machine32Bit = 0x0100;
+        const DebugStripped = 0x0200;
+        const RemovableRunFromSwap = 0x0400;
+        const NetRunFromSwap = 0x0800;
+        const System = 0x1000;
+        const Dll = 0x2000;
+        const UpSystemOnly = 0x4000;
+        const BytesReversedHi = 0x8000;
+    }
+}
+
+bitflags! {
+    /// PE DLL characteristic flags given in the Windows optional header.
+    #[derive(Debug, Clone, Copy)]
+    pub struct DllCharacteristics: u16 {
+        const HighEntropyVa = 0x0020;
+        const DynamicBase = 0x0040;
+        const ForceIntegrity = 0x0080;
+        const NxCompat = 0x0100;
+        const NoIsolation = 0x0200;
+        const NoSeh = 0x0400;
+        const NoBind = 0x0800;
+        const AppContainer = 0x1000;
+        const WdmDriver = 0x2000;
+        const GuardCf = 0x4000;
+        const TerminalServerAware = 0x8000;
+    }
+}
+
+/// A COFF header.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CoffHeader {
+    /// Targeted machine architecture.
+    pub target_machine: MachineType,
+    /// Number of sections.
+    pub number_of_sections: u16,
+    /// The file creation time, as the low 32 bits of the number of seconds since 1st Jan 1970 (like C's `time_t`).
+    pub time_date_stamp: u32,
+    /// Offset of the COFF symbol table, or zero if it is absent.
+    pub pointer_to_symbol_table: u32,
+    /// Number of symbols in the COFF symbol table.
+    pub number_of_symbols: u32,
+    /// Size of the optional header.
+    pub size_of_optional_header: u16,
+    /// COFF characteristics.
+    pub characteristics: CoffCharacteristics,
+}
+
+/// Standard optional header for the PE32 flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderStandardFieldsPe32 {
+    pub magic: u16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: u32,
+    pub size_of_initialised_data: u32,
+    pub size_of_uninitialised_data: u32,
+    pub address_of_entry_point: u32,
+    pub base_of_code: u32,
+    pub base_of_data: u32,
+}
+
+/// Standard optional header for the PE32+ flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderStandardFieldsPe32Plus {
+    pub magic: u16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: u32,
+    pub size_of_initialised_data: u32,
+    pub size_of_uninitialised_data: u32,
+    pub address_of_entry_point: u32,
+    pub base_of_code: u32,
+}
+
+/// Windows optional header for the PE32 flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderWindowsFieldsPe32 {
+    pub image_base: u32,
+    pub section_alignment: u32,
+    pub file_alignment: u32,
+    pub major_operating_system_version: u16,
+    pub minor_operating_system_version: u16,
+    pub major_image_version: u16,
+    pub minor_image_version: u16,
+    pub major_subsystem_version: u16,
+    pub minor_subsystem_version: u16,
+    pub win32_version_value: u32,
+    pub size_of_image: u32,
+    pub size_of_headers: u32,
+    pub checksum: u32,
+    pub subsystem: WindowsSubsystem,
+    pub dll_characteristics: DllCharacteristics,
+    pub size_of_stack_reserve: u32,
+    pub size_of_stack_commit: u32,
+    pub size_of_heap_reserve: u32,
+    pub size_of_heap_commit: u32,
+    pub loader_flags: u32,
+    pub number_of_rva_and_sizes: u32,
+}
+
+/// Windows optional header for the PE32+ flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderWindowsFieldsPe32Plus {
+    pub image_base: u64,
+    pub section_alignment: u32,
+    pub file_alignment: u32,
+    pub major_operating_system_version: u16,
+    pub minor_operating_system_version: u16,
+    pub major_image_version: u16,
+    pub minor_image_version: u16,
+    pub major_subsystem_version: u16,
+    pub minor_subsystem_version: u16,
+    pub win32_version_value: u32,
+    pub size_of_image: u32,
+    pub size_of_headers: u32,
+    pub checksum: u32,
+    pub subsystem: WindowsSubsystem,
+    pub dll_characteristics: DllCharacteristics,
+    pub size_of_stack_reserve: u64,
+    pub size_of_stack_commit: u64,
+    pub size_of_heap_reserve: u64,
+    pub size_of_heap_commit: u64,
+    pub loader_flags: u32,
+    pub number_of_rva_and_sizes: u32,
+}
+
+/// A header data directory.
+#[repr(C)]
+#[derive(Debug)]
+pub struct DataDirectory {
+    virtual_address: u32,
+    size: u32,
+}
+
+/// A full optional header for the PE32 flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderPe32 {
+    pub standard_fields: OptionalHeaderStandardFieldsPe32,
+    pub windows_fields: OptionalHeaderWindowsFieldsPe32,
+}
+
+/// A full optional header for the PE32+ flavour.
+#[repr(C)]
+#[derive(Debug)]
+pub struct OptionalHeaderPe32Plus {
+    pub standard_fields: OptionalHeaderStandardFieldsPe32Plus,
+    pub windows_fields: OptionalHeaderWindowsFieldsPe32Plus,
+}
+
+/// A full set of headers for the PE32 flavour.
+pub struct HeadersPe32 {
+    pub coff_header: CoffHeader,
+    pub optional_headers: OptionalHeaderPe32,
+    pub data_directories: Vec<DataDirectory>,
+}
+
+/// A full set of headers for the PE32+ flavour.
+pub struct HeadersPe32Plus {
+    pub coff_header: CoffHeader,
+    pub optional_headers: OptionalHeaderPe32Plus,
+    pub data_directories: Vec<DataDirectory>,
+}
+
+impl HeadersPe32 {
+    fn new(coff_header: CoffHeader, optional_headers: OptionalHeaderPe32, data_directories: Vec<DataDirectory>) -> Self {
+        HeadersPe32 {
+            coff_header,
+            optional_headers,
+            data_directories,
+        }
+    }
+}
+
+impl HeadersPe32Plus {
+    fn new(coff_header: CoffHeader, optional_headers: OptionalHeaderPe32Plus, data_directories: Vec<DataDirectory>) -> Self {
+        HeadersPe32Plus {
+            coff_header,
+            optional_headers,
+            data_directories,
+        }
+    }
+}
+
+impl PEHeader for CoffHeader {
+    fn coff_header(&self) -> &CoffHeader {
+        &self
+    }
+
+    fn optional_header_pe32(&self) -> Option<&OptionalHeaderPe32> {
+        None
+    }
+
+    fn optional_header_pe32plus(&self) -> Option<&OptionalHeaderPe32Plus> {
+        None
+    }
+
+    fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
+        None
+    }
+}
+
+impl PEHeader for HeadersPe32 {
+    fn coff_header(&self) -> &CoffHeader {
+        &self.coff_header
+    }
+
+    fn optional_header_pe32(&self) -> Option<&OptionalHeaderPe32> {
+        Some(&self.optional_headers)
+    }
+
+    fn optional_header_pe32plus(&self) -> Option<&OptionalHeaderPe32Plus> {
+        None
+    }
+
+    fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
+        Some(&self.data_directories)
+    }
+}
+
+impl PEHeader for HeadersPe32Plus {
+    fn coff_header(&self) -> &CoffHeader {
+        &self.coff_header
+    }
+
+    fn optional_header_pe32(&self) -> Option<&OptionalHeaderPe32> {
+        None
+    }
+
+    fn optional_header_pe32plus(&self) -> Option<&OptionalHeaderPe32Plus> {
+        Some(&self.optional_headers)
+    }
+
+    fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
+        Some(&self.data_directories)
+    }
 }
 
 impl Display for MachineType {
@@ -86,25 +368,6 @@ impl Display for MachineType {
     }
 }
 
-#[repr(u16)]
-#[derive(Debug)]
-pub enum WindowsSubsystem {
-    Unknown = 0,
-    Native = 1,
-    WindowsGui = 2,
-    WindowsCui = 3,
-    Os2Cui = 5,
-    PosixCui = 7,
-    NativeWindows = 8,
-    WindowsCeGui = 9,
-    EfiApplication = 10,
-    EfiBootServiceDriver = 11,
-    EfiRuntimeDriver = 12,
-    EfiRom = 13,
-    Xbox = 14,
-    WindowsBootApplication = 16
-}
-
 impl Display for WindowsSubsystem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -121,109 +384,7 @@ impl Display for WindowsSubsystem {
             Self::EfiRuntimeDriver => write!(f, "EFI driver with runtime services"),
             Self::EfiRom => write!(f, "EFI ROM"),
             Self::Xbox => write!(f, "Xbox"),
-            Self::WindowsBootApplication => write!(f, "Windows boot application")
+            Self::WindowsBootApplication => write!(f, "Windows boot application"),
         }
     }
 }
-
-bitflags! {
-    #[derive(Debug, Clone, Copy)]
-    pub struct Characteristics: u16 {
-        const RelocsStripped = 0x0001;
-        const ExecutableImage = 0x0002;
-        const LineNumsStripped = 0x0004;
-        const LocalSymsStripped = 0x0008;
-        const AggressiveWsTrim = 0x0010;
-        const LargeAddressAware = 0x0020;
-        const BytesReservedLo = 0x0080;
-        const Machine32Bit = 0x0100;
-        const DebugStripped = 0x0200;
-        const RemovableRunFromSwap = 0x0400;
-        const NetRunFromSwap = 0x0800;
-        const System = 0x1000;
-        const Dll = 0x2000;
-        const UpSystemOnly = 0x4000;
-        const BytesReversedHi = 0x8000;
-    }
-}
-
-bitflags! {
-    #[derive(Debug, Clone, Copy)]
-    pub struct DllCharacteristics: u16 {
-        const HighEntropyVa = 0x0020;
-        const DynamicBase = 0x0040;
-        const ForceIntegrity = 0x0080;
-        const NxCompat = 0x0100;
-        const NoIsolation = 0x0200;
-        const NoSeh = 0x0400;
-        const NoBind = 0x0800;
-        const AppContainer = 0x1000;
-        const WdmDriver = 0x2000;
-        const GuardCf = 0x4000;
-        const TerminalServerAware = 0x8000;
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct CoffHeader {
-    pub target_machine: MachineType,
-    pub number_of_sections: u16,
-    pub time_date_stamp: u32,
-    pub pointer_to_symbol_table: u32,
-    pub number_of_symbols: u32,
-    pub size_of_optional_header: u16,
-    pub characteristics: Characteristics,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct OptionalHeaderStandardFields {
-    pub magic: u16,
-    pub major_linker_version: u8,
-    pub minor_linker_version: u8,
-    pub size_of_code: u32,
-    pub size_of_initialised_data: u32,
-    pub size_of_uninitialised_data: u32,
-    pub address_of_entry_point: u32,
-    pub base_of_code: u32,
-    pub base_of_data: u32
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct OptionalHeaderWindowsFields {
-    pub image_base: u32,
-    pub section_alignment: u32,
-    pub file_alignment: u32,
-    pub major_operating_system_version: u16,
-    pub minor_operating_system_version: u16,
-    pub major_image_version: u16,
-    pub minor_image_version: u16,
-    pub major_subsystem_version: u16,
-    pub minor_subsystem_version: u16,
-    pub win32_version_value: u32,
-    pub size_of_image: u32,
-    pub size_of_headers: u32,
-    pub checksum: u32,
-    pub subsystem: u16,
-    pub dll_characteristics: u16,
-    pub size_of_stack_reserve: u32,
-    pub size_of_stack_commit: u32,
-    pub size_of_heap_reserve: u32,
-    pub size_of_heap_commit: u32,
-    pub loader_flags: u32,
-    pub number_of_rva_and_sizes: u32
-}
-
-pub struct OptionalHeader {
-    pub standard_fields: OptionalHeaderStandardFields,
-    pub windows_fields: OptionalHeaderWindowsFields
-}
-
-#[repr(C)]
-pub struct PEHeader {
-    pub coff_header: CoffHeader,
-    pub optional_header: OptionalHeader
-}
-

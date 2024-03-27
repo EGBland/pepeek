@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum PEError {
-    DeserialiseError
+    DeserialiseError(String),
 }

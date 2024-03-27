@@ -1,11 +1,9 @@
 use std::env;
 use std::fs::File;
-use std::io; 
-use std::mem::transmute;
 use std::process;
 
 pub mod pe;
-use crate::pe::CoffHeader;
+use crate::pe::{CoffCharacteristics, CoffHeader};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -15,16 +13,37 @@ fn main() {
     }
 
     let path = &args[1];
-    let mut handle = File::open(path).expect("could not open file!!");
-    let header = crate::pe::unix::get_header(&mut handle).expect("could not get header address!!");
-    println!("{}", path);
+    let handle = File::open(path).expect("could not open file!!");
+
+    let from_file = crate::pe::win::get_headers_from_file(&handle).unwrap();
+    let coff = from_file.coff_header();
+    let optional_pe32 = from_file.optional_header_pe32();
+    let optional_pe32plus = from_file.optional_header_pe32plus();
+
+    if let Some(opt) = optional_pe32 {
+        println!("{:?}", opt);
+    }
+
+    if let Some(opt) = optional_pe32plus {
+        println!("{:?}", opt);
+    }
+
+    if let Some(dirs) = from_file.data_directories() {
+        for dir in dirs {
+            println!("{:?}", dir);
+        }
+    }
+}
+
+fn print_info(header: &CoffHeader) {
     println!(
-        "Machine type: 0x{:04x} ({})",
-        header.target_machine as u16, header.target_machine
+        "Machine type: {:?} ({}) (0x{:04x})",
+        header.target_machine, header.target_machine, header.target_machine as u16
     );
-    println!(
-        "Characteristics: 0x{:04x} ({:?})",
-        header.characteristics.bits(),
-        header.characteristics
-    );
+
+    if header.characteristics.contains(CoffCharacteristics::Dll) {
+        println!("DLL? yes");
+    } else {
+        println!("DLL? no");
+    }
 }
