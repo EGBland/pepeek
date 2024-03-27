@@ -15,8 +15,8 @@ fn main() {
     }
 
     let path = &args[1];
-    let handle = File::open(path).expect("could not open file!!");
-    let header = crate::pe::win::get_header(&handle).expect("could not get header address!!");
+    let mut handle = File::open(path).expect("could not open file!!");
+    let header = crate::pe::unix::get_header(&mut handle).expect("could not get header address!!");
     println!("{}", path);
     println!(
         "Machine type: 0x{:04x} ({})",

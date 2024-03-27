@@ -1,8 +1,13 @@
 use std::fmt::Display;
 use bitflags::bitflags;
 
+pub mod err;
+
 #[cfg(windows)]
 pub mod win;
+
+#[cfg(unix)]
+pub mod unix;
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy)]
