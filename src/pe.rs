@@ -1,6 +1,8 @@
-use std::fmt::{write, Display};
-
+use std::fmt::Display;
 use bitflags::bitflags;
+
+#[cfg(windows)]
+pub mod win;
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy)]
@@ -219,3 +221,4 @@ pub struct PEHeader {
     pub coff_header: CoffHeader,
     pub optional_header: OptionalHeader
 }
+
