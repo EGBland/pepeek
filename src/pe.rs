@@ -265,8 +265,8 @@ pub struct OptionalHeaderWindowsFieldsPe32Plus {
 #[repr(C)]
 #[derive(Debug)]
 pub struct DataDirectory {
-    virtual_address: u32,
-    size: u32,
+    pub virtual_address: u32,
+    pub size: u32,
 }
 
 /// A full optional header for the PE32 flavour.
@@ -359,7 +359,7 @@ impl PEHeader for CoffHeader {
     fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
         None
     }
-    
+
     fn section_headers(&self) -> &Vec<SectionHeader> {
         todo!()
     }
@@ -381,7 +381,7 @@ impl PEHeader for HeadersPe32 {
     fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
         Some(&self.data_directories)
     }
-    
+
     fn section_headers(&self) -> &Vec<SectionHeader> {
         &self.section_headers
     }
@@ -403,7 +403,7 @@ impl PEHeader for HeadersPe32Plus {
     fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
         Some(&self.data_directories)
     }
-    
+
     fn section_headers(&self) -> &Vec<SectionHeader> {
         &self.section_headers
     }
