@@ -87,17 +87,17 @@ fn print_optional_info_pe32(header: &OptionalHeaderPe32) {
         "\t\tLinker version:             {}.{}",
         standard_fields.major_linker_version, standard_fields.minor_linker_version
     );
-    println!("\t\tBase of code:               {0} ({0:08X}h)", standard_fields.base_of_code);
-    println!("\t\tSize of code:               {0} ({0:08X}h)", standard_fields.size_of_code);
-    println!("\t\tBase of data:               {0} ({0:08X}h)", standard_fields.base_of_data);
-    println!("\t\tSize of initialised data:   {0} ({0:08X}h)", standard_fields.size_of_initialised_data);
-    println!("\t\tSize of uninitialised data: {0} ({0:08X}h)", standard_fields.size_of_uninitialised_data);
-    println!("\t\tEntry point address:        {0} ({0:08X}h)", standard_fields.address_of_entry_point);
+    println!("\t\tBase of code:               {0:08X}h ({0})", standard_fields.base_of_code);
+    println!("\t\tSize of code:               {0:08X}h ({0})", standard_fields.size_of_code);
+    println!("\t\tBase of data:               {0:08X}h ({0})", standard_fields.base_of_data);
+    println!("\t\tSize of initialised data:   {0:08X}h ({0})", standard_fields.size_of_initialised_data);
+    println!("\t\tSize of uninitialised data: {0:08X}h ({0})", standard_fields.size_of_uninitialised_data);
+    println!("\t\tEntry point address:        {0:08X}h ({0})", standard_fields.address_of_entry_point);
 
     println!("\tWindows fields:");
-    println!("\t\tImage base:                 {0} ({0:08X}h)", windows_fields.image_base);
-    println!("\t\tSection alignment:          {0} ({0:08X}h)", windows_fields.section_alignment);
-    println!("\t\tFile alignment:             {0} ({0:08X}h)", windows_fields.file_alignment);
+    println!("\t\tImage base:                 {0:08X}h ({0})", windows_fields.image_base);
+    println!("\t\tSection alignment:          {0:08X}h ({0})", windows_fields.section_alignment);
+    println!("\t\tFile alignment:             {0:08X}h ({0})", windows_fields.file_alignment);
     println!(
         "\t\tOS version:                 {}.{}",
         windows_fields.major_operating_system_version, windows_fields.minor_operating_system_version
@@ -111,12 +111,12 @@ fn print_optional_info_pe32(header: &OptionalHeaderPe32) {
         "\t\tSubsystem version:          {}.{}",
         windows_fields.major_subsystem_version, windows_fields.minor_subsystem_version
     );
-    println!("\t\tSize of image:              {0} ({0:08X}h)", windows_fields.size_of_image);
-    println!("\t\tSize of headers:            {0} ({0:08X}h)", windows_fields.size_of_headers);
-    println!("\t\tSize of stack reserve:      {0} ({0:08X}h)", windows_fields.size_of_stack_reserve);
-    println!("\t\tSize of stack commit:       {0} ({0:08X}h)", windows_fields.size_of_stack_commit);
-    println!("\t\tSize of heap reserve:       {0} ({0:08X}h)", windows_fields.size_of_heap_reserve);
-    println!("\t\tSize of heap commit:        {0} ({0:08X}h)", windows_fields.size_of_heap_commit);
+    println!("\t\tSize of image:              {0:08X}h ({0})", windows_fields.size_of_image);
+    println!("\t\tSize of headers:            {0:08X}h ({0})", windows_fields.size_of_headers);
+    println!("\t\tSize of stack reserve:      {0:08X}h ({0})", windows_fields.size_of_stack_reserve);
+    println!("\t\tSize of stack commit:       {0:08X}h ({0})", windows_fields.size_of_stack_commit);
+    println!("\t\tSize of heap reserve:       {0:08X}h ({0})", windows_fields.size_of_heap_reserve);
+    println!("\t\tSize of heap commit:        {0:08X}h ({0})", windows_fields.size_of_heap_commit);
     println!("\t\tNumber of data directories: {}", windows_fields.number_of_rva_and_sizes);
     println!("\t\tDLL characteristics:        {:?}", windows_fields.dll_characteristics);
 }
@@ -131,16 +131,16 @@ fn print_optional_info_pe32plus(header: &OptionalHeaderPe32Plus) {
         "\t\tLinker version:             {}.{}",
         standard_fields.major_linker_version, standard_fields.minor_linker_version
     );
-    println!("\t\tBase of code:               {0} ({0:08X}h)", standard_fields.base_of_code);
-    println!("\t\tSize of code:               {0} ({0:08X}h)", standard_fields.size_of_code);
-    println!("\t\tSize of initialised data:   {0} ({0:08X}h)", standard_fields.size_of_initialised_data);
-    println!("\t\tSize of uninitialised data: {0} ({0:08X}h)", standard_fields.size_of_uninitialised_data);
-    println!("\t\tEntry point address:        {0} ({0:08X}h)", standard_fields.address_of_entry_point);
+    println!("\t\tBase of code:               {0:08X}h ({0})", standard_fields.base_of_code);
+    println!("\t\tSize of code:               {0:08X}h ({0})", standard_fields.size_of_code);
+    println!("\t\tSize of initialised data:   {0:08X}h ({0})", standard_fields.size_of_initialised_data);
+    println!("\t\tSize of uninitialised data: {0:08X}h ({0})", standard_fields.size_of_uninitialised_data);
+    println!("\t\tEntry point address:        {0:08X}h ({0})", standard_fields.address_of_entry_point);
 
     println!("\tWindows fields:");
-    println!("\t\tImage base:                 {0} ({0:016X}h)", windows_fields.image_base);
-    println!("\t\tSection alignment:          {0} ({0:08X}h)", windows_fields.section_alignment);
-    println!("\t\tFile alignment:             {0} ({0:08X}h)", windows_fields.file_alignment);
+    println!("\t\tImage base:                 {0:016X}h ({0})", windows_fields.image_base);
+    println!("\t\tSection alignment:                  {0:08X}h ({0})", windows_fields.section_alignment);
+    println!("\t\tFile alignment:                     {0:08X}h ({0})", windows_fields.file_alignment);
     println!(
         "\t\tOS version:                 {}.{}",
         windows_fields.major_operating_system_version, windows_fields.minor_operating_system_version
@@ -154,12 +154,12 @@ fn print_optional_info_pe32plus(header: &OptionalHeaderPe32Plus) {
         "\t\tSubsystem version:          {}.{}",
         windows_fields.major_subsystem_version, windows_fields.minor_subsystem_version
     );
-    println!("\t\tSize of image:              {0} ({0:08X}h)", windows_fields.size_of_image);
-    println!("\t\tSize of headers:            {0} ({0:08X}h)", windows_fields.size_of_headers);
-    println!("\t\tSize of stack reserve:      {0} ({0:016X}h)", windows_fields.size_of_stack_reserve);
-    println!("\t\tSize of stack commit:       {0} ({0:016X}h)", windows_fields.size_of_stack_commit);
-    println!("\t\tSize of heap reserve:       {0} ({0:016X}h)", windows_fields.size_of_heap_reserve);
-    println!("\t\tSize of heap commit:        {0} ({0:016X}h)", windows_fields.size_of_heap_commit);
+    println!("\t\tSize of image:                      {0:08X}h ({0})", windows_fields.size_of_image);
+    println!("\t\tSize of headers:                    {0:08X}h ({0})", windows_fields.size_of_headers);
+    println!("\t\tSize of stack reserve:      {0:016X}h ({0})", windows_fields.size_of_stack_reserve);
+    println!("\t\tSize of stack commit:       {0:016X}h ({0})", windows_fields.size_of_stack_commit);
+    println!("\t\tSize of heap reserve:       {0:016X}h ({0})", windows_fields.size_of_heap_reserve);
+    println!("\t\tSize of heap commit:        {0:016X}h ({0})", windows_fields.size_of_heap_commit);
     println!("\t\tNumber of data directories: {}", windows_fields.number_of_rva_and_sizes);
     println!("\t\tDLL characteristics:        {:?}", windows_fields.dll_characteristics);
 }
@@ -172,8 +172,8 @@ fn print_data_directories(dirs: &Vec<DataDirectory>) {
         } else {
             println!("\t\tTable {}", i);
         }
-        println!("\t\t\tVirtual address: {0} ({0:08X}h)", dir.virtual_address);
-        println!("\t\t\tSize:            {0} ({0:08X}h)", dir.size);
+        println!("\t\t\tVirtual address: {0:08X}h ({0})", dir.virtual_address);
+        println!("\t\t\tSize:            {0:08X}h ({0})", dir.size);
     }
 }
 
@@ -182,12 +182,12 @@ fn print_section_headers(section_headers: &Vec<SectionHeader>) {
     for (i, header) in section_headers.iter().enumerate() {
         let name_str = String::from_utf8_lossy(&header.name);
         println!("\tSection {}: {}", i, name_str);
-        println!("\t\tVirtual size:           {0} ({0:08X}h)", header.virtual_size);
-        println!("\t\tVirtual address:        {0} ({0:08X}h)", header.virtual_address);
-        println!("\t\tSize of raw data:       {0} ({0:08X}h)", header.size_of_raw_data);
-        println!("\t\tPointer to raw data:    {0} ({0:08X}h)", header.pointer_to_raw_data);
-        println!("\t\tPointer to relocations: {0} ({0:08X}h)", header.pointer_to_relocations);
-        println!("\t\tNumber of relocations:  {0} ({0:08X}h)", header.number_of_relocations);
+        println!("\t\tVirtual size:           {0:08X}h ({0})", header.virtual_size);
+        println!("\t\tVirtual address:        {0:08X}h ({0})", header.virtual_address);
+        println!("\t\tSize of raw data:       {0:08X}h ({0})", header.size_of_raw_data);
+        println!("\t\tPointer to raw data:    {0:08X}h ({0})", header.pointer_to_raw_data);
+        println!("\t\tPointer to relocations: {0:08X}h ({0})", header.pointer_to_relocations);
+        println!("\t\tNumber of relocations:  {0:08X}h ({0})", header.number_of_relocations);
         println!("\t\tFlags:                  {:?}", header.characteristics);
     }
 }

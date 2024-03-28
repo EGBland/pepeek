@@ -20,7 +20,7 @@ impl TryFrom<&mut File> for CoffHeader {
     }
 }
 
-pub fn get_headers_from_file<'a: 'a>(fh: &'a File) -> Result<Box<dyn PEHeader>, PEError> {
+pub fn get_headers_from_file(fh: &File) -> Result<Box<dyn PEHeader>, PEError> {
     match do_get_headers_from_file(fh) {
         Ok(header) => Ok(header),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
