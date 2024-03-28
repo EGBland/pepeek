@@ -1,6 +1,7 @@
 use chrono::prelude::DateTime;
 use chrono::Utc;
-use pe::{traits::PEHeader, DataDirectory, OptionalHeaderPe32, OptionalHeaderPe32Plus, SectionHeader};
+use pe::headers::CoffHeader;
+use pe::traits::PEHeader;
 use std::env;
 use std::fs::File;
 use std::path::Path;
@@ -8,7 +9,8 @@ use std::process;
 use std::time::{Duration, UNIX_EPOCH};
 
 pub mod pe;
-use crate::pe::{CoffCharacteristics, CoffHeader};
+use crate::pe::body::SectionHeader;
+use crate::pe::headers::{CoffCharacteristics, DataDirectory, OptionalHeaderPe32, OptionalHeaderPe32Plus};
 
 const DATA_DIRECTORY_DISPLAY_NAMES: [&str; 16] = [
     "Export Table",
@@ -40,13 +42,14 @@ fn main() {
     let handle = File::open(path).expect("could not open file!!");
 
     let from_file = crate::pe::win::get_headers_from_file(&handle).unwrap();
+    let section_table = crate::pe::win::get_section_table(&handle, from_file.as_ref()).unwrap();
     println!("{}", path.file_name().unwrap().to_str().unwrap());
-    print_coff_info(&from_file);
+    print_coff_info(from_file.as_ref());
     print_optional_info(&from_file);
-    print_section_headers(&from_file.section_headers());
+    print_section_headers(&section_table);
 }
 
-fn print_coff_info(full_header: &Box<dyn PEHeader>) {
+fn print_coff_info(full_header: &(impl PEHeader + ?Sized)) {
     let coff_header = full_header.coff_header();
 
     println!("COFF Header:");

@@ -3,26 +3,21 @@ use std::io;
 use std::mem::{size_of, transmute};
 use std::os::windows::fs::FileExt;
 
-use crate::pe::err::PEError;
-use crate::pe::{CoffHeader, PEType};
-
+use super::body::SectionHeader;
+use super::err::PEError;
+use super::headers::{CoffHeader, DataDirectory, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, PEType};
 use super::traits::PEHeader;
-use super::{DataDirectory, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, SectionHeader};
-
-impl TryFrom<&mut File> for CoffHeader {
-    type Error = PEError;
-
-    fn try_from(value: &mut File) -> Result<Self, Self::Error> {
-        match get_coff_header(&value) {
-            Ok(header) => Ok(header),
-            Err(err) => Err(PEError::DeserialiseError(err.to_string())),
-        }
-    }
-}
 
 pub fn get_headers_from_file(fh: &File) -> Result<Box<dyn PEHeader>, PEError> {
     match do_get_headers_from_file(fh) {
         Ok(header) => Ok(header),
+        Err(err) => Err(PEError::DeserialiseError(err.to_string())),
+    }
+}
+
+pub fn get_section_table(fh: &File, headers: &(impl PEHeader + ?Sized)) -> Result<Vec<SectionHeader>, PEError> {
+    match get_section_headers(fh, headers.coff_header()) {
+        Ok(section_table) => Ok(section_table),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
     }
 }
@@ -41,15 +36,13 @@ fn do_get_headers_from_file(fh: &File) -> io::Result<Box<dyn PEHeader>> {
             Some(PEType::Pe32) => {
                 let optional_headers = get_optional_headers_pe32(fh, coff_header_addr, &coff_header)?;
                 let data_directories = get_data_directories_pe32(fh, coff_header_addr, &optional_headers)?;
-                let section_headers = get_section_headers(fh, &coff_header)?;
-                let full_headers = HeadersPe32::new(coff_header, optional_headers, data_directories, section_headers);
+                let full_headers = HeadersPe32::new(coff_header, optional_headers, data_directories);
                 return Ok(Box::new(full_headers));
             }
             Some(PEType::Pe32Plus) => {
                 let optional_headers = get_optional_headers_pe32plus(fh, coff_header_addr, &coff_header)?;
                 let data_directories = get_data_directories_pe32plus(fh, coff_header_addr, &optional_headers)?;
-                let section_headers = get_section_headers(fh, &coff_header)?;
-                let full_headers = HeadersPe32Plus::new(coff_header, optional_headers, data_directories, section_headers);
+                let full_headers = HeadersPe32Plus::new(coff_header, optional_headers, data_directories);
                 return Ok(Box::new(full_headers));
             }
             None => panic!("invalid/missing magic number for optional header!!"),
