@@ -39,10 +39,10 @@ fn main() {
     }
 
     let path = Path::new(&args[1]);
-    let handle = File::open(path).expect("could not open file!!");
+    let mut handle = File::open(path).expect("could not open file!!");
 
-    let from_file = crate::pe::win::get_headers_from_file(&handle).unwrap();
-    let section_table = crate::pe::win::get_section_table(&handle, from_file.as_ref()).unwrap();
+    let from_file = crate::pe::deser::get_headers_from_file(&mut handle).unwrap();
+    let section_table = crate::pe::deser::get_section_table(&mut handle, from_file.as_ref()).unwrap();
     println!("{}", path.file_name().unwrap().to_str().unwrap());
     print_coff_info(from_file.as_ref());
     print_optional_info(&from_file);

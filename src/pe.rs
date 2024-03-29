@@ -1,6 +1,4 @@
-use std::fmt::Display;
-
-use self::traits::PEHeader;
+pub(crate) mod internal;
 
 /// Error enums for the crate.
 pub mod err;
@@ -14,10 +12,5 @@ pub mod body;
 /// PE traits.
 pub mod traits;
 
-/// Windows-specific implementation for deserialisation.
-#[cfg(windows)]
-pub mod win;
-
-/// UNIX-specific implementation for deserialisation.
-#[cfg(unix)]
-pub mod unix;
+/// PE file deserialisation.
+pub mod deser;

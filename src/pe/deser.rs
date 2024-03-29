@@ -1,29 +1,28 @@
-use std::fs::File;
-use std::io;
-use std::mem::{size_of, transmute};
-use std::os::windows::fs::FileExt;
-
 use super::body::SectionHeader;
 use super::err::PEError;
 use super::headers::{CoffHeader, DataDirectory, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, PEType};
+use super::internal::agnostic_fio::read_exact;
 use super::traits::PEHeader;
+use std::fs::File;
+use std::io;
+use std::mem::{size_of, transmute};
 
-pub fn get_headers_from_file(fh: &File) -> Result<Box<dyn PEHeader>, PEError> {
+pub fn get_headers_from_file(fh: &mut File) -> Result<Box<dyn PEHeader>, PEError> {
     match do_get_headers_from_file(fh) {
         Ok(header) => Ok(header),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
     }
 }
 
-pub fn get_section_table(fh: &File, headers: &(impl PEHeader + ?Sized)) -> Result<Vec<SectionHeader>, PEError> {
+pub fn get_section_table(fh: &mut File, headers: &(impl PEHeader + ?Sized)) -> Result<Vec<SectionHeader>, PEError> {
     match get_section_headers(fh, headers.coff_header()) {
         Ok(section_table) => Ok(section_table),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
     }
 }
 
-fn do_get_headers_from_file(fh: &File) -> io::Result<Box<dyn PEHeader>> {
-    let coff_header_addr = get_coff_header_address(&fh)?;
+fn do_get_headers_from_file(fh: &mut File) -> io::Result<Box<dyn PEHeader>> {
+    let coff_header_addr = get_coff_header_address(fh)?;
     let coff_header = get_coff_header(fh)?;
 
     if coff_header.size_of_optional_header == 0 {
@@ -50,7 +49,7 @@ fn do_get_headers_from_file(fh: &File) -> io::Result<Box<dyn PEHeader>> {
     }
 }
 
-fn get_section_headers(fh: &File, coff_header: &CoffHeader) -> io::Result<Vec<SectionHeader>> {
+fn get_section_headers(fh: &mut File, coff_header: &CoffHeader) -> io::Result<Vec<SectionHeader>> {
     let coff_addr = get_coff_header_address(fh)?;
     let section_base_addr = coff_addr + 20 + (coff_header.size_of_optional_header as u32);
     let num_sections = coff_header.number_of_sections;
@@ -58,69 +57,49 @@ fn get_section_headers(fh: &File, coff_header: &CoffHeader) -> io::Result<Vec<Se
     let mut ret: Vec<SectionHeader> = Vec::with_capacity(num_sections as usize);
     let mut section_addr = section_base_addr;
     for _ in 0..num_sections {
-        let mut section_header_bytes: [u8; 40] = [0_u8; 40];
-        let bytes_read = fh.seek_read(&mut section_header_bytes, section_addr as u64)?;
-        if bytes_read != 40 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading section header"));
-        }
-        let section_header: SectionHeader = unsafe { transmute(section_header_bytes) };
+        let section_header: SectionHeader = unsafe { transmute(read_exact::<{ size_of::<SectionHeader>() }>(fh, section_addr as u64)?) };
         ret.push(section_header);
         section_addr += size_of::<SectionHeader>() as u32;
     }
     Ok(ret)
 }
 
-fn get_data_directories_pe32(fh: &File, coff_addr: u32, headers: &OptionalHeaderPe32) -> io::Result<Vec<DataDirectory>> {
+fn get_data_directories_pe32(fh: &mut File, coff_addr: u32, headers: &OptionalHeaderPe32) -> io::Result<Vec<DataDirectory>> {
     let num_directories = headers.windows_fields.number_of_rva_and_sizes;
     let base_addr = coff_addr + 20 + 96; // +20 for coff header, +96 for pe32 optional headers
     get_data_directories(fh, base_addr, num_directories)
 }
 
-fn get_data_directories_pe32plus(fh: &File, coff_addr: u32, headers: &OptionalHeaderPe32Plus) -> io::Result<Vec<DataDirectory>> {
+fn get_data_directories_pe32plus(fh: &mut File, coff_addr: u32, headers: &OptionalHeaderPe32Plus) -> io::Result<Vec<DataDirectory>> {
     let num_directories = headers.windows_fields.number_of_rva_and_sizes;
     let base_addr = coff_addr + 20 + 112; // +20 for coff header, +112 for pe32+ optional headers
     get_data_directories(fh, base_addr, num_directories)
 }
 
-fn get_data_directories(fh: &File, base_addr: u32, num_directories: u32) -> io::Result<Vec<DataDirectory>> {
+fn get_data_directories(fh: &mut File, base_addr: u32, num_directories: u32) -> io::Result<Vec<DataDirectory>> {
     let mut ret: Vec<DataDirectory> = Vec::with_capacity(num_directories as usize);
     let mut addr = base_addr;
     for _ in 0..num_directories {
-        let mut dir_bytes: [u8; 8] = [0_u8; 8];
-        let bytes_read = fh.seek_read(&mut dir_bytes, addr as u64)?;
-        if bytes_read != 8 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading data directory"));
-        }
-        let dir: DataDirectory = unsafe { transmute(dir_bytes) };
+        let dir: DataDirectory = unsafe { transmute(read_exact::<{ size_of::<DataDirectory>() }>(fh, addr as u64)?) };
         ret.push(dir);
         addr += size_of::<DataDirectory>() as u32;
     }
     Ok(ret)
 }
 
-fn get_optional_headers_pe32(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32> {
-    let mut headers_bytes: [u8; 96] = [0_u8; 96];
+fn get_optional_headers_pe32(fh: &mut File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32> {
     let optional_addr = get_optional_headers_addr(coff_addr, &coff_header).unwrap();
-    let bytes_read = fh.seek_read(&mut headers_bytes, optional_addr as u64)?;
-    if bytes_read != 96 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading optional headers"));
-    }
-    let headers = unsafe { transmute(headers_bytes) }; // TODO this probably won't work
+    let headers = unsafe { transmute(read_exact::<{ size_of::<OptionalHeaderPe32>() }>(fh, optional_addr as u64)?) };
     Ok(headers)
 }
 
-fn get_optional_headers_pe32plus(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32Plus> {
-    let mut headers_bytes: [u8; 112] = [0_u8; 112];
+fn get_optional_headers_pe32plus(fh: &mut File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<OptionalHeaderPe32Plus> {
     let optional_addr = get_optional_headers_addr(coff_addr, &coff_header).unwrap();
-    let bytes_read = fh.seek_read(&mut headers_bytes, optional_addr as u64)?;
-    if bytes_read != 112 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading optional headers"));
-    }
-    let headers = unsafe { transmute(headers_bytes) }; // TODO this probably won't work
+    let headers = unsafe { transmute(read_exact::<{ size_of::<OptionalHeaderPe32Plus>() }>(fh, optional_addr as u64)?) };
     Ok(headers)
 }
 
-fn get_coff_header(fh: &File) -> io::Result<CoffHeader> {
+fn get_coff_header(fh: &mut File) -> io::Result<CoffHeader> {
     let metadata = fh.metadata()?;
     let len = metadata.len();
 
@@ -130,8 +109,7 @@ fn get_coff_header(fh: &File) -> io::Result<CoffHeader> {
     }
 
     let header_addr = get_coff_header_address(fh)?;
-    let bytes = get_coff_header_bytes(fh, header_addr)?;
-    let header: CoffHeader = unsafe { transmute(bytes) }; // TODO this is amusing but extremely bad :-)
+    let header: CoffHeader = unsafe { transmute(read_exact::<{ size_of::<CoffHeader>() }>(fh, header_addr as u64)?) };
     Ok(header)
 }
 
@@ -143,18 +121,10 @@ fn get_optional_headers_addr(coff_addr: u32, coff_header: &CoffHeader) -> Option
     }
 }
 
-fn get_optional_headers_magic(fh: &File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<Option<PEType>> {
+fn get_optional_headers_magic(fh: &mut File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<Option<PEType>> {
     let addr_option = get_optional_headers_addr(coff_addr, coff_header);
     if let Some(addr) = addr_option {
-        let mut magic_bytes: [u8; 2] = [0_u8; 2];
-        let bytes_read = fh.seek_read(&mut magic_bytes, addr as u64)?;
-        if bytes_read != 2 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "reached EOF while reading optional headers magic number",
-            ));
-        }
-        let magic: u16 = u16::from_le_bytes(magic_bytes);
+        let magic: u16 = u16::from_le_bytes(read_exact(fh, addr as u64)?);
         return match magic {
             0x10b => Ok(Some(PEType::Pe32)),
             0x20b => Ok(Some(PEType::Pe32Plus)),
@@ -165,20 +135,6 @@ fn get_optional_headers_magic(fh: &File, coff_addr: u32, coff_header: &CoffHeade
     }
 }
 
-fn get_coff_header_address(fh: &File) -> io::Result<u32> {
-    let mut header_addr_bytes: [u8; 4] = [0_u8; 4];
-    let bytes_read = fh.seek_read(&mut header_addr_bytes, 0x3c)?;
-    if bytes_read != 4 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading header address"));
-    }
-    Ok(u32::from_le_bytes(header_addr_bytes) + 4)
-}
-
-fn get_coff_header_bytes(fh: &File, addr: u32) -> io::Result<[u8; 20]> {
-    let mut header_bytes: [u8; 20] = [0_u8; 20];
-    let bytes_read = fh.seek_read(&mut header_bytes, addr as u64)?;
-    if bytes_read != 20 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading header"));
-    }
-    Ok(header_bytes)
+fn get_coff_header_address(fh: &mut File) -> io::Result<u32> {
+    Ok(u32::from_le_bytes(read_exact(fh, 0x3c)?) + 4)
 }
