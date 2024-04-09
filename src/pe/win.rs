@@ -3,12 +3,13 @@ use std::io;
 use std::mem::{size_of, transmute};
 use std::os::windows::fs::FileExt;
 
+use super::body::export::ExportDirectoryTable;
 use super::body::SectionHeader;
 use super::err::PEError;
-use super::headers::{CoffHeader, DataDirectory, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, PEType};
+use super::headers::{CoffHeader, DataDirectory, Headers, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, PEType};
 use super::traits::PEHeader;
 
-pub fn get_headers_from_file(fh: &File) -> Result<Box<dyn PEHeader>, PEError> {
+pub fn get_headers_from_file(fh: &File) -> Result<Headers, PEError> {
     match do_get_headers_from_file(fh) {
         Ok(header) => Ok(header),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
@@ -22,13 +23,32 @@ pub fn get_section_table(fh: &File, headers: &(impl PEHeader + ?Sized)) -> Resul
     }
 }
 
-fn do_get_headers_from_file(fh: &File) -> io::Result<Box<dyn PEHeader>> {
+pub fn get_export_table(fh: &File, section_table: &Vec<SectionHeader>) -> Result<ExportDirectoryTable, PEError> {
+    todo!()
+}
+
+pub fn rva_to_file_ptr(rva: u32, sections: &Vec<SectionHeader>) -> Option<u32> {
+    for section in sections {
+        let section_virtual_begin = section.virtual_address;
+        let section_virtual_end = section_virtual_begin + section.virtual_size;
+        let section_file_ptr = section.pointer_to_raw_data;
+
+        if section_virtual_begin <= rva && rva <= section_virtual_end {
+            return Some(rva - section_virtual_begin + section_file_ptr);
+        }
+    }
+    
+    None
+}
+
+fn do_get_headers_from_file(fh: &File) -> io::Result<Headers> {
+    let base_addr = get_base_addr(&fh)?;
     let coff_header_addr = get_coff_header_address(&fh)?;
     let coff_header = get_coff_header(fh)?;
 
     if coff_header.size_of_optional_header == 0 {
         // no optional header, just return the COFF header
-        return Ok(Box::new(coff_header));
+        return Ok(Headers::from_coff(base_addr, coff_header));
     } else {
         // get optional headers, then return the full set of headers
         let magic_option = get_optional_headers_magic(fh, coff_header_addr, &coff_header)?;
@@ -37,13 +57,13 @@ fn do_get_headers_from_file(fh: &File) -> io::Result<Box<dyn PEHeader>> {
                 let optional_headers = get_optional_headers_pe32(fh, coff_header_addr, &coff_header)?;
                 let data_directories = get_data_directories_pe32(fh, coff_header_addr, &optional_headers)?;
                 let full_headers = HeadersPe32::new(coff_header, optional_headers, data_directories);
-                return Ok(Box::new(full_headers));
+                return Ok(Headers::from_pe32(base_addr, coff_header, full_headers));
             }
             Some(PEType::Pe32Plus) => {
                 let optional_headers = get_optional_headers_pe32plus(fh, coff_header_addr, &coff_header)?;
                 let data_directories = get_data_directories_pe32plus(fh, coff_header_addr, &optional_headers)?;
                 let full_headers = HeadersPe32Plus::new(coff_header, optional_headers, data_directories);
-                return Ok(Box::new(full_headers));
+                return Ok(Headers::from_pe32plus(base_addr, coff_header, full_headers));
             }
             None => panic!("invalid/missing magic number for optional header!!"),
         }
@@ -165,13 +185,17 @@ fn get_optional_headers_magic(fh: &File, coff_addr: u32, coff_header: &CoffHeade
     }
 }
 
-fn get_coff_header_address(fh: &File) -> io::Result<u32> {
+fn get_base_addr(fh: &File) -> io::Result<u32> {
     let mut header_addr_bytes: [u8; 4] = [0_u8; 4];
     let bytes_read = fh.seek_read(&mut header_addr_bytes, 0x3c)?;
     if bytes_read != 4 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "reached EOF while reading header address"));
     }
-    Ok(u32::from_le_bytes(header_addr_bytes) + 4)
+    Ok(u32::from_le_bytes(header_addr_bytes))
+}
+
+fn get_coff_header_address(fh: &File) -> io::Result<u32> {
+    Ok(get_base_addr(fh)? + 4)
 }
 
 fn get_coff_header_bytes(fh: &File, addr: u32) -> io::Result<[u8; 20]> {

@@ -1,5 +1,6 @@
 use chrono::prelude::DateTime;
 use chrono::Utc;
+use pe::body::export::ExportDirectoryTable;
 use pe::headers::CoffHeader;
 use pe::traits::PEHeader;
 use std::env;
@@ -11,6 +12,7 @@ use std::time::{Duration, UNIX_EPOCH};
 pub mod pe;
 use crate::pe::body::SectionHeader;
 use crate::pe::headers::{CoffCharacteristics, DataDirectory, OptionalHeaderPe32, OptionalHeaderPe32Plus};
+use crate::pe::win::rva_to_file_ptr;
 
 const DATA_DIRECTORY_DISPLAY_NAMES: [&str; 16] = [
     "Export Table",
@@ -34,7 +36,7 @@ const DATA_DIRECTORY_DISPLAY_NAMES: [&str; 16] = [
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        println!("Usage: pepeek <path to exe/dll>");
+        println!("Usage: pepeek <path to PE file>");
         process::exit(1);
     }
 
@@ -42,11 +44,14 @@ fn main() {
     let handle = File::open(path).expect("could not open file!!");
 
     let from_file = crate::pe::win::get_headers_from_file(&handle).unwrap();
-    let section_table = crate::pe::win::get_section_table(&handle, from_file.as_ref()).unwrap();
+    let section_table = crate::pe::win::get_section_table(&handle, &from_file).unwrap();
     println!("{}", path.file_name().unwrap().to_str().unwrap());
-    print_coff_info(from_file.as_ref());
+    println!("COFF base address: {0:08X}h ({0})", from_file.base_addr);
+    print_coff_info(&from_file);
     print_optional_info(&from_file);
     print_section_headers(&section_table);
+
+    println!("{:08X}", rva_to_file_ptr(0x1CB60, &section_table).unwrap());
 }
 
 fn print_coff_info(full_header: &(impl PEHeader + ?Sized)) {
@@ -68,7 +73,7 @@ fn print_coff_info(full_header: &(impl PEHeader + ?Sized)) {
     println!("\tCharacteristics: {:?}", coff_header.characteristics);
 }
 
-fn print_optional_info(full_header: &Box<dyn PEHeader>) {
+fn print_optional_info(full_header: &(impl PEHeader + ?Sized)) {
     if let Some(pe32_header) = full_header.optional_header_pe32() {
         print_optional_info_pe32(pe32_header);
         print_data_directories(&full_header.data_directories().unwrap());
@@ -178,6 +183,10 @@ fn print_data_directories(dirs: &Vec<DataDirectory>) {
         println!("\t\t\tVirtual address: {0:08X}h ({0})", dir.virtual_address);
         println!("\t\t\tSize:            {0:08X}h ({0})", dir.size);
     }
+}
+
+fn print_export_table(table: &ExportDirectoryTable) {
+
 }
 
 fn print_section_headers(section_headers: &Vec<SectionHeader>) {

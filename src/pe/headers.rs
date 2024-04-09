@@ -248,6 +248,76 @@ pub struct HeadersPe32Plus {
     pub data_directories: Vec<DataDirectory>,
 }
 
+/// An enum to hold the three possible optional header formats (none, PE32, PE32+) in a discriminated union.
+enum OptionalHeaderType {
+    None,
+    Pe32(OptionalHeaderPe32),
+    Pe32Plus(OptionalHeaderPe32Plus),
+}
+
+/// A full set of headers, with extra data.
+pub struct Headers {
+    pub base_addr: u32,
+    coff_header: CoffHeader,
+    optional_header: OptionalHeaderType,
+    data_directories: Vec<DataDirectory>,
+}
+
+impl Headers {
+    pub(crate) fn from_coff(base_addr: u32, coff_header: CoffHeader) -> Headers {
+        Headers {
+            base_addr,
+            coff_header,
+            optional_header: OptionalHeaderType::None,
+            data_directories: vec![],
+        }
+    }
+
+    pub(crate) fn from_pe32(base_addr: u32, coff_header: CoffHeader, optional_header: HeadersPe32) -> Headers {
+        Headers {
+            base_addr,
+            coff_header,
+            optional_header: OptionalHeaderType::Pe32(optional_header.optional_headers),
+            data_directories: optional_header.data_directories,
+        }
+    }
+
+    pub(crate) fn from_pe32plus(base_addr: u32, coff_header: CoffHeader, optional_header: HeadersPe32Plus) -> Headers {
+        Headers {
+            base_addr,
+            coff_header,
+            optional_header: OptionalHeaderType::Pe32Plus(optional_header.optional_headers),
+            data_directories: optional_header.data_directories,
+        }
+    }
+}
+
+impl PEHeader for Headers {
+    fn coff_header(&self) -> &CoffHeader {
+        &self.coff_header
+    }
+
+    fn optional_header_pe32(&self) -> Option<&OptionalHeaderPe32> {
+        if let OptionalHeaderType::Pe32(pe32) = &self.optional_header {
+            return Some(pe32);
+        } else {
+            return None;
+        }
+    }
+
+    fn optional_header_pe32plus(&self) -> Option<&OptionalHeaderPe32Plus> {
+        if let OptionalHeaderType::Pe32Plus(pe32plus) = &self.optional_header {
+            return Some(pe32plus);
+        } else {
+            return None;
+        }
+    }
+
+    fn data_directories(&self) -> Option<&Vec<DataDirectory>> {
+        Some(&self.data_directories)
+    }
+}
+
 impl HeadersPe32 {
     pub fn new(coff_header: CoffHeader, optional_headers: OptionalHeaderPe32, data_directories: Vec<DataDirectory>) -> Self {
         HeadersPe32 {
