@@ -13,3 +13,11 @@ pub struct ExportDirectoryTable {
     pub name_pointer_rva: u32,
     pub ordinal_table_rva: u32,
 }
+
+#[derive(Debug)]
+pub enum ExportAddress {
+    Export(u32),
+    Forward(u32)
+}
+
+pub type ExportNamePointer = u32;

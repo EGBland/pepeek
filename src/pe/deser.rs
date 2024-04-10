@@ -1,3 +1,6 @@
+use crate::pe::internal::agnostic_fio::{self, read_null_delimited};
+
+use super::body::export::{ExportAddress, ExportDirectoryTable};
 use super::body::SectionHeader;
 use super::err::PEError;
 use super::headers::{CoffHeader, DataDirectory, HeadersPe32, HeadersPe32Plus, OptionalHeaderPe32, OptionalHeaderPe32Plus, PEType};
@@ -6,6 +9,7 @@ use super::traits::PEHeader;
 use std::fs::File;
 use std::io;
 use std::mem::{size_of, transmute};
+use std::str;
 
 pub fn get_headers_from_file(fh: &mut File) -> Result<Box<dyn PEHeader>, PEError> {
     match do_get_headers_from_file(fh) {
@@ -19,6 +23,86 @@ pub fn get_section_table(fh: &mut File, headers: &(impl PEHeader + ?Sized)) -> R
         Ok(section_table) => Ok(section_table),
         Err(err) => Err(PEError::DeserialiseError(err.to_string())),
     }
+}
+
+pub fn get_export_table(fh: &mut File, headers: &(impl PEHeader + ?Sized), section_table: &Vec<SectionHeader>) -> Result<ExportDirectoryTable, PEError> {
+    match do_get_export_table(fh, headers, section_table) {
+        Ok(Some(export_table)) => Ok(export_table),
+        Ok(None) => Err(PEError::DeserialiseError(String::from("No export table in PE file"))),
+        Err(err) => Err(PEError::DeserialiseError(err.to_string()))
+    }
+}
+
+pub fn get_dll_name(fh: &mut File, headers: &(impl PEHeader + ?Sized), section_table: &Vec<SectionHeader>) -> Result<String, PEError> {
+    let export_table = get_export_table(fh, headers, section_table)?;
+    let dll_name_result =get_dll_name_from_export_table(fh, &export_table, section_table);
+    match dll_name_result {
+        Ok(name) => Ok(name),
+        Err(err) => Err(PEError::DeserialiseError(err.to_string()))
+    }
+}
+
+pub fn get_export_address_table(fh: &mut File, headers: &(impl PEHeader + ?Sized), section_table: &Vec<SectionHeader>) -> Result<Vec<ExportAddress>, PEError> {
+    let export_table = get_export_table(fh, headers, section_table)?;
+    match do_get_export_address_table(fh, &export_table, section_table) {
+        Ok(table) => Ok(table),
+        Err(err) => Err(PEError::DeserialiseError(err.to_string()))
+    }
+}
+
+fn do_get_export_address_table(fh: &mut File, export_table: &ExportDirectoryTable, section_table: &Vec<SectionHeader>) -> io::Result<Vec<ExportAddress>> {
+    let mut export_address_table: Vec<ExportAddress> = Vec::with_capacity(export_table.address_table_entries as usize);
+    let export_address_table_file_ptr = rva_to_file_ptr(export_table.export_address_table_rva, section_table);
+    if let Some(base_addr) = export_address_table_file_ptr {
+        for i in 0..export_table.address_table_entries {
+            let next_addr_buf: [u8; 4] = read_exact(fh, (base_addr + 4 * i) as u64)?;
+            let next_addr = u32::from_le_bytes(next_addr_buf);
+            // TODO deal with forwarder RVAs
+            export_address_table.push(ExportAddress::Export(next_addr));
+        }
+    }
+
+    Ok(export_address_table) // TODO hides RVA error
+}
+
+fn get_dll_name_from_export_table(fh: &mut File, export_table: &ExportDirectoryTable, section_table: &Vec<SectionHeader>) -> io::Result<String> {
+    let name_file_ptr_option = rva_to_file_ptr(export_table.name_rva, section_table);
+    if let Some(name_file_ptr) = name_file_ptr_option {
+        println!("Name is at {:08X}", name_file_ptr);
+        let name_buf: String = read_null_delimited(fh, name_file_ptr as u64)?.iter().map(|x| *x as char).collect();
+        return Ok(name_buf);
+    }
+    Ok(String::from("")) // TODO change
+}
+
+fn do_get_export_table(fh: &mut File, headers: &(impl PEHeader + ?Sized), section_table: &Vec<SectionHeader>) -> io::Result<Option<ExportDirectoryTable>> {
+    let export_dir_option = get_export_data_directory(headers);
+    if let Some(export_dir) = export_dir_option {
+        let file_ptr_option = rva_to_file_ptr(export_dir.virtual_address, section_table);
+        if let Some(file_ptr) = file_ptr_option {
+            println!("Export table is at {:08X}", file_ptr);
+            let export_table_buf = agnostic_fio::read_exact::<{size_of::<ExportDirectoryTable>()}>(fh, file_ptr as u64)?;
+            let export_table: ExportDirectoryTable = unsafe { transmute(export_table_buf) };
+            return Ok(Some(export_table));
+        }
+    }
+    
+    Ok(None)
+}
+
+fn get_export_data_directory<'a>(headers: &'a (impl PEHeader + ?Sized)) -> Option<&'a DataDirectory> {
+    let data_dirs = headers.data_directories()?;
+    if data_dirs.len() == 0 {
+        return None;
+    }
+
+    let export_dir = &data_dirs[0];
+
+    if export_dir.virtual_address == 0 && export_dir.size == 0 {
+        return None;
+    }
+
+    Some(&export_dir)
 }
 
 fn do_get_headers_from_file(fh: &mut File) -> io::Result<Box<dyn PEHeader>> {
@@ -119,6 +203,20 @@ fn get_optional_headers_addr(coff_addr: u32, coff_header: &CoffHeader) -> Option
     } else {
         return Some(coff_addr + 20);
     }
+}
+
+fn rva_to_file_ptr(rva: u32, sections: &Vec<SectionHeader>) -> Option<u32> {
+    for section in sections {
+        let section_virtual_begin = section.virtual_address;
+        let section_virtual_end = section_virtual_begin + section.virtual_size;
+        let section_file_ptr = section.pointer_to_raw_data;
+
+        if section_virtual_begin <= rva && rva <= section_virtual_end {
+            return Some(rva - section_virtual_begin + section_file_ptr);
+        }
+    }
+    
+    None
 }
 
 fn get_optional_headers_magic(fh: &mut File, coff_addr: u32, coff_header: &CoffHeader) -> io::Result<Option<PEType>> {

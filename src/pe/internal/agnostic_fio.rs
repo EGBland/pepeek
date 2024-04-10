@@ -30,3 +30,18 @@ pub fn read_exact<const N: usize>(fh: &mut File, offset: u64) -> io::Result<[u8;
 
     Ok(buf)
 }
+
+pub fn read_null_delimited(fh: &mut File, offset: u64) -> io::Result<Vec<u8>> {
+    // TODO reimplement
+    let mut ret: Vec<u8> = Vec::with_capacity(16);
+    'outer: loop {
+        let next_chunk: [u8; 16] = read_exact(fh, offset)?;
+        for b in next_chunk {
+            if b == 0 {
+                break 'outer;
+            }
+            ret.push(b);
+        }
+    }
+    Ok(ret)
+}

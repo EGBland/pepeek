@@ -1,5 +1,6 @@
 use chrono::prelude::DateTime;
 use chrono::Utc;
+use pe::body::export::ExportDirectoryTable;
 use pe::headers::CoffHeader;
 use pe::traits::PEHeader;
 use std::env;
@@ -9,7 +10,9 @@ use std::process;
 use std::time::{Duration, UNIX_EPOCH};
 
 pub mod pe;
+use crate::pe::body::export::ExportAddress;
 use crate::pe::body::SectionHeader;
+use crate::pe::deser::{get_dll_name, get_export_address_table, get_export_table};
 use crate::pe::headers::{CoffCharacteristics, DataDirectory, OptionalHeaderPe32, OptionalHeaderPe32Plus};
 
 const DATA_DIRECTORY_DISPLAY_NAMES: [&str; 16] = [
@@ -43,10 +46,34 @@ fn main() {
 
     let from_file = crate::pe::deser::get_headers_from_file(&mut handle).unwrap();
     let section_table = crate::pe::deser::get_section_table(&mut handle, from_file.as_ref()).unwrap();
-    println!("{}", path.file_name().unwrap().to_str().unwrap());
+    let export_table_option = get_export_table(&mut handle, from_file.as_ref(), &section_table).ok();
+    let dll_name_option = get_dll_name(&mut handle, from_file.as_ref(), &section_table).ok();
+    println!("Input file: {}", path.file_name().unwrap().to_str().unwrap());
+    if let Some(dll_name) = dll_name_option {
+        println!("DLL name: {}", dll_name);
+    }
     print_coff_info(from_file.as_ref());
     print_optional_info(&from_file);
     print_section_headers(&section_table);
+
+    println!("");
+    if let Some(export_table) = export_table_option {
+        print_export_table(&export_table);
+        let exports = get_export_address_table(&mut handle, from_file.as_ref(), &section_table).unwrap();
+        println!("Exports:");
+        for export_addr in exports {
+            if let ExportAddress::Export(export) = export_addr {
+                println!("\t[EXP] {:08X}", export);
+            }
+
+            if let ExportAddress::Forward(forward) = export_addr {
+                println!("\t[FWD] {:08X}", forward);
+            }
+        }
+    }
+    else {
+        println!("This PE has no export table.")
+    }
 }
 
 fn print_coff_info(full_header: &(impl PEHeader + ?Sized)) {
@@ -195,8 +222,25 @@ fn print_section_headers(section_headers: &Vec<SectionHeader>) {
     }
 }
 
+fn print_export_table(export_table: &ExportDirectoryTable) {
+    println!("Export directory table:");
+    println!("\tTimestamp:                {}", format_unix_time(export_table.time_date_stamp as u64));
+    println!("\tVersion:                  {}.{}", export_table.major_version, export_table.minor_version);
+    println!("\tName RVA:                 {0:08X}h ({0})", export_table.name_rva);
+    println!("\tOrdinal base:             {0:08X}h ({0})", export_table.ordinal_base);
+    println!("\tAddress table entries:    {0:08X}h ({0})", export_table.address_table_entries);
+    println!("\tNumber of name pointers:  {0:08X}h ({0})", export_table.number_of_name_pointers);
+    println!("\tExport address table RVA: {0:08X}h ({0})", export_table.export_address_table_rva);
+    println!("\tName pointer RVA:         {0:08X}h ({0})", export_table.name_pointer_rva);
+    println!("\tOrdinal table RVA:        {0:08X}h ({0})", export_table.ordinal_table_rva);
+}
+
 fn format_time_created(header: &CoffHeader) -> String {
-    let unix_time = UNIX_EPOCH + Duration::from_secs(header.time_date_stamp as u64);
+    format_unix_time(header.time_date_stamp as u64)
+}
+
+fn format_unix_time(time: u64) -> String {
+    let unix_time = UNIX_EPOCH + Duration::from_secs(time);
     let datetime = DateTime::<Utc>::from(unix_time);
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
 }
